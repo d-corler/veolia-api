@@ -32,7 +32,7 @@ jobs:
           add: "pyproject.toml"
           ref: "main"
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and publish to PyPi
         env:

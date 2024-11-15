@@ -113,6 +113,11 @@ license = "MIT"
 python = ">=3.9"
 aiohttp = "^3.11.2"
 
+[tool.poetry.dev-dependencies]
+pre-commit = "^4.0.1"
+black = "^24.10.0"
+ruff = "^0.7.4"
+
 [tool.bumpver]
 current_version = "1.0.0"
 version_pattern = "MAJOR.MINOR.PATCH"
@@ -137,3 +142,10 @@ push = true
     "{version}",
     "{pep440_version}",
 ]
+
+[tool.tox]
+envlist = ["pre-commit"]
+
+[testenv.pre-commit]
+deps = ["pre-commit"]
+commands = ["pre-commit run --all-files"]

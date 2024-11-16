@@ -154,7 +154,15 @@ class VeoliaAPI:
         params: dict | None = None,
     ) -> aiohttp.ClientResponse:
         """Make an HTTP request"""
-        self.logger.info("Making %s request to %s with params: %s", method, url, params)
+        safe_params = params.copy()
+        if "password" in safe_params:
+            safe_params["password"] = "******"
+        self.logger.info(
+            "Making %s request to %s with params: %s",
+            method,
+            url,
+            safe_params,
+        )
         headers = {}
 
         if method == "GET":

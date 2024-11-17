@@ -77,6 +77,7 @@ select = [
 
 ## Ignore error code
 ignore = [
+    "E501", # line too long
     "D203", # D203/D211 are incompatible, using D211 => no-blank-line-before-class
     "D205", # docstring style
     "D415", # docstring style
@@ -85,6 +86,7 @@ ignore = [
     "EM101", # counter-productive : creates more lines and decreases readability
     "EM102", # counter-productive : creates more lines and decreases readability
     "S105", # Wrong possible hardcoded password assigned
+    "DTZ005", # No need TZ in datetime
 ]
 
 [tool.ruff.lint.per-file-ignores]

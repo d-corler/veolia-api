@@ -11,7 +11,7 @@ ignore-words-list = "aaa"
 
 [tool.ruff]
 target-version = "py312"
-exclude = ["setup.py"]
+exclude = ["setup.py", "usage_example.py"]
 
 [tool.ruff.lint]
 select = [

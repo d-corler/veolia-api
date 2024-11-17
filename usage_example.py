@@ -3,41 +3,27 @@
 import asyncio
 import logging
 
-from veolia_api.veolia_api import ConsumptionType, VeoliaAPI
+from veolia_api.veolia_api import VeoliaAPI
 
 logging.basicConfig(level=logging.DEBUG)
 
 
 async def main() -> None:
     """Main function."""
+    # Create an instance of the VeoliaAPI class
     api = VeoliaAPI("username", "password")
-    await api.login()
 
     try:
-        ### Get the consumption data for the year 2024
-        data = await api.get_consumption_data(ConsumptionType.YEARLY, 2024)
-        print(data)
+        # Fetch data for November 2024
+        await api.fetch_all_data(2024, 11)
 
-        ### Get the consumption data for Octobre 2024
-        data = await api.get_consumption_data(ConsumptionType.MONTHLY, 2024, 10)
-        print(data)
+        # Display fetched data
+        print(api.account_data.daily_consumption)
+        print(api.account_data.monthly_consumption)
+        print(api.account_data.alert_settings.daily_enabled)
 
-        #### Get the alerts set for the account
-        # data = await api.get_alerts()
-
-        ### Set the alerts for the account
-        # alerts = AlertSettings(
-        #     daily_enabled=True,
-        #     daily_threshold=550,
-        #     daily_contact_email=True,
-        #     daily_contact_sms=True,
-        #     monthly_enabled=True,
-        #     monthly_threshold=8,
-        #     monthly_contact_email=True,
-        #     monthly_contact_sms=True
-        # )
-        # data = await api.set_alerts(alerts)
-        # print(data)
+    except Exception as e:
+        logging.error("An error occurred: %s", e)
     finally:
         await api.close()
 

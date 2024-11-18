@@ -8,24 +8,24 @@ class AlertSettings:
     """Alert settings.
     daily_enabled: bool = To enable or disable daily alerts
     daily_threshold: int = Daily threshold in liters (minimum 100)
-    daily_contact_email: bool = To enable or disable daily
+    daily_notif_email: bool = To enable or disable daily
         alerts by email (Can't be disabled)
-    daily_contact_sms: bool = To enable or disable daily alerts by SMS
+    daily_notif_sms: bool = To enable or disable daily alerts by SMS
     monthly_enabled: bool = To enable or disable monthly alerts
     monthly_threshold: int = Monthly threshold in M3 (minimum 1)
-    monthly_contact_email: bool = To enable or disable monthly
+    monthly_notif_email: bool = To enable or disable monthly
         alerts by email (Can't be disabled)
-    monthly_contact_sms: bool = To enable or disable monthly alerts by SMS
+    monthly_notif_sms: bool = To enable or disable monthly alerts by SMS
     """
 
     daily_enabled: bool
     daily_threshold: int
-    daily_contact_email: bool
-    daily_contact_sms: bool
+    daily_notif_email: bool
+    daily_notif_sms: bool
     monthly_enabled: bool
     monthly_threshold: int
-    monthly_contact_email: bool
-    monthly_contact_sms: bool
+    monthly_notif_email: bool
+    monthly_notif_sms: bool
 
 
 @dataclass

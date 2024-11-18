@@ -366,7 +366,7 @@ class VeoliaAPI:
                 raise VeoliaAPIError("Get data call error")
             return await response.json()
 
-    async def get_alerts(self) -> AlertSettings:
+    async def get_alerts_settings(self) -> AlertSettings:
         """Get the consumption alerts
         Response example:
         {
@@ -411,24 +411,24 @@ class VeoliaAPI:
         return AlertSettings(
             daily_enabled=bool(daily_alert),
             daily_threshold=daily_alert["valeur"] if daily_alert else None,
-            daily_contact_email=(
+            daily_notif_email=(
                 daily_alert["moyen_contact"]["souscrit_par_email"]
                 if daily_alert
                 else None
             ),
-            daily_contact_sms=(
+            daily_notif_sms=(
                 daily_alert["moyen_contact"]["souscrit_par_mobile"]
                 if daily_alert
                 else None
             ),
             monthly_enabled=bool(monthly_alert),
             monthly_threshold=monthly_alert["valeur"] if monthly_alert else None,
-            monthly_contact_email=(
+            monthly_notif_email=(
                 monthly_alert["moyen_contact"]["souscrit_par_email"]
                 if monthly_alert
                 else None
             ),
-            monthly_contact_sms=(
+            monthly_notif_sms=(
                 monthly_alert["moyen_contact"]["souscrit_par_mobile"]
                 if monthly_alert
                 else None
@@ -446,9 +446,9 @@ class VeoliaAPI:
             year,
             month,
         )
-        self.account_data.alert_settings = await self.get_alerts()
+        self.account_data.alert_settings = await self.get_alerts_settings()
 
-    async def set_alerts(self, alert_settings: AlertSettings) -> bool:
+    async def set_alerts_settings(self, alert_settings: AlertSettings) -> bool:
         """Set the consumption alerts"""
         await self.check_token()
         url = f"{BACKEND_ISTEFR}/alertes/{self.account_data.numero_pds}"
@@ -460,8 +460,8 @@ class VeoliaAPI:
                 "unite": "L",
                 "souscrite": True,
                 "contact_channel": {
-                    "subscribed_by_email": alert_settings.daily_contact_email,
-                    "subscribed_by_mobile": alert_settings.daily_contact_sms,
+                    "subscribed_by_email": alert_settings.daily_notif_email,
+                    "subscribed_by_mobile": alert_settings.daily_notif_sms,
                 },
             }
 
@@ -471,8 +471,8 @@ class VeoliaAPI:
                 "unite": "M3",
                 "souscrite": True,
                 "contact_channel": {
-                    "subscribed_by_email": alert_settings.monthly_contact_email,
-                    "subscribed_by_mobile": alert_settings.monthly_contact_sms,
+                    "subscribed_by_email": alert_settings.monthly_notif_email,
+                    "subscribed_by_mobile": alert_settings.monthly_notif_sms,
                 },
             }
 

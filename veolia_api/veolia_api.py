@@ -404,8 +404,9 @@ class VeoliaAPI:
                     f"Get alerts call error status code {response.status}",
                 )
             data = await response.json()
-            daily_alert = data["seuils"].get("journalier", None)
-            monthly_alert = data["seuils"].get("mensuel", None)
+            seuils = data.get("seuils", {})
+            daily_alert = seuils.get("journalier", None)
+            monthly_alert = seuils.get("mensuel", None)
 
         return AlertSettings(
             daily_enabled=bool(daily_alert),

@@ -458,6 +458,20 @@ class VeoliaAPI:
             ),
         )
 
+    async def get_mensualisation_plan(self) -> dict:
+        """Get the plan de mensualisation for the given abonnement ID"""
+        url = f"{BACKEND_ISTEFR}/abonnements/{self.account_data.id_abonnement}/facturation/mensualisation/plan"
+        headers = {
+            "Authorization": f"Bearer {self.account_data.access_token}",
+        }
+        async with self.session.get(url, headers=headers) as response:
+            logging.info("Received response with status code %s", response.status)
+            if response.status != HTTPStatus.OK:
+                raise VeoliaAPIGetDataError(
+                    f"call to= mensualisation/plan failed with http status= {response.status}",
+                )
+            return await response.json()
+
     async def fetch_all_data(self, year: int, month: int) -> None:
         """Fetch all consumption data and insert it into the dataclass"""
         self.account_data.monthly_consumption = await self.get_consumption_data(
@@ -469,6 +483,7 @@ class VeoliaAPI:
             year,
             month,
         )
+        self.account_data.billing_plan = await self.get_mensualisation_plan()
         self.account_data.alert_settings = await self.get_alerts_settings()
 
     async def set_alerts_settings(self, alert_settings: AlertSettings) -> bool:

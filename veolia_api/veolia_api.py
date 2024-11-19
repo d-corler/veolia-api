@@ -244,7 +244,7 @@ class VeoliaAPI:
             not self.account_data.access_token
             or datetime.now().timestamp() >= self.account_data.token_expiration
         ):
-            self.logger.error("No access token or token expired")
+            self.logger.info("No access token or token expired")
             await self.login()
 
     async def get_access_token(self) -> None:

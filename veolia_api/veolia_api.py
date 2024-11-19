@@ -96,7 +96,7 @@ class VeoliaAPI:
         safe_params = params.copy()
         if "password" in safe_params:
             safe_params["password"] = "******"
-        self.logger.info(
+        self.logger.debug(
             "Making %s request to %s with params: %s",
             method,
             url,
@@ -111,7 +111,7 @@ class VeoliaAPI:
                 params=params,
                 allow_redirects=False,
             ) as response:
-                self.logger.info(
+                self.logger.debug(
                     "Received response with status code %s",
                     response.status,
                 )
@@ -125,7 +125,7 @@ class VeoliaAPI:
                 data=urlencode(params),
                 allow_redirects=False,
             ) as response:
-                self.logger.info(
+                self.logger.debug(
                     "Received response with status code %s",
                     response.status,
                 )
@@ -218,7 +218,7 @@ class VeoliaAPI:
                 )[0]
                 if not self.account_data.code:
                     raise VeoliaAPIAuthCodeNotFoundError("Authorization code not found")
-                self.logger.info("Authorization code received")
+                self.logger.debug("Authorization code received")
         elif response.status == HTTPStatus.OK and next_url == CALLBACK_ENDPOINT:
             next_url = None
         else:
@@ -230,13 +230,14 @@ class VeoliaAPI:
 
     async def login(self) -> bool:
         """Login to the Veolia API"""
+        self.logger.info("Logging in...")
         email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
 
         if not self.username or not self.password:
             raise VeoliaAPIInvalidCredentialsError("Missing username or password")
         if not re.match(email_regex, self.username):
             raise VeoliaAPIInvalidCredentialsError("Invalid email format")
-        self.logger.info("Starting login process...")
+        self.logger.debug("Starting login process...")
         await self.execute_flow()
         await self.get_access_token()
         await self.get_client_data()
@@ -261,13 +262,13 @@ class VeoliaAPI:
             not self.account_data.access_token
             or datetime.now().timestamp() >= self.account_data.token_expiration
         ):
-            self.logger.info("No access token or token expired")
+            self.logger.debug("No access token or token expired")
             await self.login()
 
     async def get_access_token(self) -> None:
         """Request the access token"""
         token_url = f"{LOGIN_URL}{OAUTH_TOKEN}"
-        self.logger.info("Requesting access token...")
+        self.logger.debug("Requesting access token...")
         async with self.session.post(
             token_url,
             json={
@@ -289,12 +290,13 @@ class VeoliaAPI:
             self.account_data.token_expiration = (
                 datetime.now() + timedelta(seconds=token_data.get("expires_in", 0))
             ).timestamp()
-            self.logger.info("Access token received")
+            self.logger.debug("OK - Access token retrieved")
 
     async def get_client_data(self) -> None:
         """Get the account data"""
         await self.check_token()
 
+        self.logger.debug("Getting user & billing data...")
         headers = {"Authorization": f"Bearer {self.account_data.access_token}"}
         async with self.session.get(
             url=f"{BACKEND_ISTEFR}/espace-client?type-front={TYPE_FRONT}",
@@ -332,6 +334,7 @@ class VeoliaAPI:
                 or not self.account_data.numero_compteur
             ):
                 raise VeoliaAPIResponseError("Some user data not found in the response")
+            self.logger.debug("OK - User data received")
 
         # Facturation request
         async with self.session.get(
@@ -355,6 +358,7 @@ class VeoliaAPI:
                 raise VeoliaAPIResponseError(
                     "date_debut_abonnement not found in the response",
                 )
+            self.logger.debug("OK - Billing data received")
 
     async def get_consumption_data(
         self,
@@ -364,6 +368,8 @@ class VeoliaAPI:
     ) -> dict:
         """Get the water consumption data"""
         await self.check_token()
+
+        self.logger.debug("Getting consumption data...")
         headers = {"Authorization": f"Bearer {self.account_data.access_token}"}
         params = {
             "annee": year,
@@ -382,11 +388,12 @@ class VeoliaAPI:
         url = f"{BACKEND_ISTEFR}/consommations/{self.account_data.id_abonnement}/{endpoint}"
 
         async with self.session.get(url, headers=headers, params=params) as response:
-            self.logger.info("Received response with status code %s", response.status)
+            self.logger.debug("Received response with status code %s", response.status)
             if response.status != HTTPStatus.OK:
                 raise VeoliaAPIGetDataError(
                     f"call to= consommations failed with http status= {response.status}",
                 )
+            self.logger.debug("OK - Consumption data received")
             return await response.json()
 
     async def get_alerts_settings(self) -> AlertSettings:
@@ -414,6 +421,8 @@ class VeoliaAPI:
         }
         """
         await self.check_token()
+
+        self.logger.debug("Getting alerts settings...")
         headers = {"Authorization": f"Bearer {self.account_data.access_token}"}
         params = {
             "abo_id": self.account_data.id_abonnement,
@@ -421,7 +430,7 @@ class VeoliaAPI:
         url = f"{BACKEND_ISTEFR}/alertes/{self.account_data.numero_pds}"
 
         async with self.session.get(url, headers=headers, params=params) as response:
-            self.logger.info("Received response with status code %s", response.status)
+            self.logger.debug("Received response with status code %s", response.status)
             if response.status != HTTPStatus.OK:
                 raise VeoliaAPIGetDataError(
                     f"call to= alertes failed with http status= {response.status}",
@@ -430,6 +439,8 @@ class VeoliaAPI:
             seuils = data.get("seuils", {})
             daily_alert = seuils.get("journalier", None)
             monthly_alert = seuils.get("mensuel", None)
+
+            self.logger.debug("OK - Alerts settings received")
 
         return AlertSettings(
             daily_enabled=bool(daily_alert),
@@ -460,20 +471,25 @@ class VeoliaAPI:
 
     async def get_mensualisation_plan(self) -> dict:
         """Get the plan de mensualisation for the given abonnement ID"""
+        await self.check_token()
+
+        self.logger.debug("Getting mensualisation plan...")
         url = f"{BACKEND_ISTEFR}/abonnements/{self.account_data.id_abonnement}/facturation/mensualisation/plan"
         headers = {
             "Authorization": f"Bearer {self.account_data.access_token}",
         }
         async with self.session.get(url, headers=headers) as response:
-            logging.info("Received response with status code %s", response.status)
+            logging.debug("Received response with status code %s", response.status)
             if response.status != HTTPStatus.OK:
                 raise VeoliaAPIGetDataError(
                     f"call to= mensualisation/plan failed with http status= {response.status}",
                 )
+            self.logger.debug("OK - Mensualisation plan received")
             return await response.json()
 
     async def fetch_all_data(self, year: int, month: int) -> None:
         """Fetch all consumption data and insert it into the dataclass"""
+        self.logger.info("Fetching all data...")
         self.account_data.monthly_consumption = await self.get_consumption_data(
             ConsumptionType.YEARLY,
             year,
@@ -485,10 +501,13 @@ class VeoliaAPI:
         )
         self.account_data.billing_plan = await self.get_mensualisation_plan()
         self.account_data.alert_settings = await self.get_alerts_settings()
+        self.logger.info("OK - All data fetched")
 
     async def set_alerts_settings(self, alert_settings: AlertSettings) -> bool:
         """Set the consumption alerts"""
         await self.check_token()
+
+        self.logger.debug("Setting alerts params...")
         url = f"{BACKEND_ISTEFR}/alertes/{self.account_data.numero_pds}"
         payload = {}
 
@@ -529,14 +548,16 @@ class VeoliaAPI:
         }
 
         async with self.session.post(url, headers=headers, json=payload) as response:
-            self.logger.info("Received response with status code %s ", response.status)
+            self.logger.debug("Received response with status code %s ", response.status)
             res = response.status
             if res != HTTPStatus.NO_CONTENT:
                 raise VeoliaAPISetDataError(
                     f"Failed to set alerts settings with status code {response.status}",
                 )
+            self.logger.debug("OK - Alerts settings set")
             return res == HTTPStatus.NO_CONTENT
 
     async def close(self) -> None:
         """Close the session"""
+        self.logger.debug("Closing session")
         await self.session.close()

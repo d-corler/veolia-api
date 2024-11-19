@@ -4,13 +4,24 @@ import base64
 import hashlib
 import logging
 import os
+import re
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import aiohttp
 
-from veolia_api.exceptions import VeoliaAPIError
+from veolia_api.exceptions import (
+    VeoliaAPIAuthCodeNotFoundError,
+    VeoliaAPIAuthError,
+    VeoliaAPIFlowError,
+    VeoliaAPIGetDataError,
+    VeoliaAPIInvalidCredentialsError,
+    VeoliaAPIResponseError,
+    VeoliaAPISetDataError,
+    VeoliaAPITokenError,
+    VeoliaAPIUnexpectedResponseError,
+)
 
 from .constants import (
     API_CONNECTION_FLOW,
@@ -187,10 +198,10 @@ class VeoliaAPI:
             response.status == HTTPStatus.BAD_REQUEST
             and next_url == LOGIN_PASSWORD_ENDPOINT
         ):
-            raise VeoliaAPIError("Invalid username or password")
+            raise VeoliaAPIAuthError("Invalid username or password")
         if response.status != self.api_flow[next_url]["success_status"]:
-            raise VeoliaAPIError(
-                f"API call to {full_url} failed with status {response.status}",
+            raise VeoliaAPIFlowError(
+                f"Call to= {full_url} failed with status= {response.status}",
             )
 
         if response.status == HTTPStatus.FOUND:
@@ -206,19 +217,25 @@ class VeoliaAPI:
                     [None],
                 )[0]
                 if not self.account_data.code:
-                    raise VeoliaAPIError("Authorization code not found")
+                    raise VeoliaAPIAuthCodeNotFoundError("Authorization code not found")
                 self.logger.info("Authorization code received")
         elif response.status == HTTPStatus.OK and next_url == CALLBACK_ENDPOINT:
             next_url = None
         else:
-            raise VeoliaAPIError(f"Unexpected 200 response from {full_url}")
+            raise VeoliaAPIUnexpectedResponseError(
+                f"Unexpected http status code: {response.status} at {full_url}",
+            )
 
         return next_url, state
 
     async def login(self) -> bool:
         """Login to the Veolia API"""
+        email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+
         if not self.username or not self.password:
-            raise VeoliaAPIError("Username or password not provided")
+            raise VeoliaAPIInvalidCredentialsError("Missing username or password")
+        if not re.match(email_regex, self.username):
+            raise VeoliaAPIInvalidCredentialsError("Invalid email format")
         self.logger.info("Starting login process...")
         await self.execute_flow()
         await self.get_access_token()
@@ -263,12 +280,12 @@ class VeoliaAPI:
         ) as token_response:
 
             if token_response.status != HTTPStatus.OK:
-                raise VeoliaAPIError("Token API call error")
+                raise VeoliaAPITokenError("Token API call error")
 
             token_data = await token_response.json()
             self.account_data.access_token = token_data.get("access_token")
             if not self.account_data.access_token:
-                raise VeoliaAPIError("Access token not found in the token response")
+                raise VeoliaAPITokenError("Access token not found")
             self.account_data.token_expiration = (
                 datetime.now() + timedelta(seconds=token_data.get("expires_in", 0))
             ).timestamp()
@@ -284,7 +301,9 @@ class VeoliaAPI:
             headers=headers,
         ) as userdata_response:
             if userdata_response.status != HTTPStatus.OK:
-                raise VeoliaAPIError("Espace-client call error")
+                raise VeoliaAPIGetDataError(
+                    f"call to= espace-client failed with http status= {userdata_response.status}",
+                )
 
             userdata = await userdata_response.json()
             self.account_data.id_abonnement = (
@@ -312,7 +331,7 @@ class VeoliaAPI:
                 or not self.account_data.contact_id
                 or not self.account_data.numero_compteur
             ):
-                raise VeoliaAPIError("Some user data not found in the response")
+                raise VeoliaAPIResponseError("Some user data not found in the response")
 
         # Facturation request
         async with self.session.get(
@@ -320,18 +339,20 @@ class VeoliaAPI:
             headers=headers,
         ) as facturation_response:
             if facturation_response.status != HTTPStatus.OK:
-                raise VeoliaAPIError("Facturation call error")
+                raise VeoliaAPIGetDataError(
+                    f"call to= facturation failed with http status= {userdata_response.status}",
+                )
 
             facturation_data = await facturation_response.json()
             self.account_data.numero_pds = facturation_data.get("numero_pds")
             if not self.account_data.numero_pds:
-                raise VeoliaAPIError("numero_pds not found in the response")
+                raise VeoliaAPIResponseError("numero_pds not found in the response")
 
             self.account_data.date_debut_abonnement = facturation_data.get(
                 "date_debut_abonnement",
             )
             if not self.account_data.date_debut_abonnement:
-                raise VeoliaAPIError(
+                raise VeoliaAPIResponseError(
                     "date_debut_abonnement not found in the response",
                 )
 
@@ -363,7 +384,9 @@ class VeoliaAPI:
         async with self.session.get(url, headers=headers, params=params) as response:
             self.logger.info("Received response with status code %s", response.status)
             if response.status != HTTPStatus.OK:
-                raise VeoliaAPIError("Get data call error")
+                raise VeoliaAPIGetDataError(
+                    f"call to= consommations failed with http status= {response.status}",
+                )
             return await response.json()
 
     async def get_alerts_settings(self) -> AlertSettings:
@@ -400,8 +423,8 @@ class VeoliaAPI:
         async with self.session.get(url, headers=headers, params=params) as response:
             self.logger.info("Received response with status code %s", response.status)
             if response.status != HTTPStatus.OK:
-                raise VeoliaAPIError(
-                    f"Get alerts call error status code {response.status}",
+                raise VeoliaAPIGetDataError(
+                    f"call to= alertes failed with http status= {response.status}",
                 )
             data = await response.json()
             seuils = data.get("seuils", {})
@@ -492,7 +515,12 @@ class VeoliaAPI:
 
         async with self.session.post(url, headers=headers, json=payload) as response:
             self.logger.info("Received response with status code %s ", response.status)
-            return response.status == HTTPStatus.NO_CONTENT
+            res = response.status
+            if res != HTTPStatus.NO_CONTENT:
+                raise VeoliaAPISetDataError(
+                    f"Failed to set alerts settings with status code {response.status}",
+                )
+            return res == HTTPStatus.NO_CONTENT
 
     async def close(self) -> None:
         """Close the session"""

@@ -389,6 +389,7 @@ class VeoliaAPI:
 
         async with self.session.get(url, headers=headers, params=params) as response:
             self.logger.debug("Received response with status code %s", response.status)
+
             if response.status != HTTPStatus.OK:
                 raise VeoliaAPIGetDataError(
                     f"call to= consommations failed with http status= {response.status}",
@@ -431,43 +432,50 @@ class VeoliaAPI:
 
         async with self.session.get(url, headers=headers, params=params) as response:
             self.logger.debug("Received response with status code %s", response.status)
-            if response.status != HTTPStatus.OK:
-                raise VeoliaAPIGetDataError(
-                    f"call to= alertes failed with http status= {response.status}",
+
+            if response.status == HTTPStatus.NO_CONTENT:
+                self.logger.info("No alerts settings found")
+                return AlertSettings()
+
+            if response.status == HTTPStatus.OK:
+                data = await response.json()
+                seuils = data.get("seuils", {})
+                daily_alert = seuils.get("journalier", None)
+                monthly_alert = seuils.get("mensuel", None)
+
+                self.logger.debug("OK - Alerts settings received")
+
+                return AlertSettings(
+                    daily_enabled=bool(daily_alert),
+                    daily_threshold=daily_alert["valeur"] if daily_alert else None,
+                    daily_notif_email=(
+                        daily_alert["moyen_contact"]["souscrit_par_email"]
+                        if daily_alert
+                        else None
+                    ),
+                    daily_notif_sms=(
+                        daily_alert["moyen_contact"]["souscrit_par_mobile"]
+                        if daily_alert
+                        else None
+                    ),
+                    monthly_enabled=bool(monthly_alert),
+                    monthly_threshold=(
+                        monthly_alert["valeur"] if monthly_alert else None
+                    ),
+                    monthly_notif_email=(
+                        monthly_alert["moyen_contact"]["souscrit_par_email"]
+                        if monthly_alert
+                        else None
+                    ),
+                    monthly_notif_sms=(
+                        monthly_alert["moyen_contact"]["souscrit_par_mobile"]
+                        if monthly_alert
+                        else None
+                    ),
                 )
-            data = await response.json()
-            seuils = data.get("seuils", {})
-            daily_alert = seuils.get("journalier", None)
-            monthly_alert = seuils.get("mensuel", None)
-
-            self.logger.debug("OK - Alerts settings received")
-
-        return AlertSettings(
-            daily_enabled=bool(daily_alert),
-            daily_threshold=daily_alert["valeur"] if daily_alert else None,
-            daily_notif_email=(
-                daily_alert["moyen_contact"]["souscrit_par_email"]
-                if daily_alert
-                else None
-            ),
-            daily_notif_sms=(
-                daily_alert["moyen_contact"]["souscrit_par_mobile"]
-                if daily_alert
-                else None
-            ),
-            monthly_enabled=bool(monthly_alert),
-            monthly_threshold=monthly_alert["valeur"] if monthly_alert else None,
-            monthly_notif_email=(
-                monthly_alert["moyen_contact"]["souscrit_par_email"]
-                if monthly_alert
-                else None
-            ),
-            monthly_notif_sms=(
-                monthly_alert["moyen_contact"]["souscrit_par_mobile"]
-                if monthly_alert
-                else None
-            ),
-        )
+            raise VeoliaAPIGetDataError(
+                f"call to= alertes failed with http status= {response.status}",
+            )
 
     async def get_mensualisation_plan(self) -> dict:
         """Get the plan de mensualisation for the given abonnement ID"""
@@ -480,12 +488,20 @@ class VeoliaAPI:
         }
         async with self.session.get(url, headers=headers) as response:
             logging.debug("Received response with status code %s", response.status)
-            if response.status != HTTPStatus.OK:
-                raise VeoliaAPIGetDataError(
-                    f"call to= mensualisation/plan failed with http status= {response.status}",
-                )
-            self.logger.debug("OK - Mensualisation plan received")
-            return await response.json()
+
+            if response.status == HTTPStatus.NO_CONTENT:
+                self.logger.info("No mensualisation plan found")
+                return {}
+
+            if response.status == HTTPStatus.OK:
+                self.logger.debug("OK - Mensualisation plan received")
+                return await response.json()
+
+            error_message = (
+                f"call to= mensualisation/plan failed with http status= {response.status}",
+            )
+            self.logger.error(error_message)
+            return {}
 
     async def fetch_all_data(self, year: int, month: int) -> None:
         """Fetch all consumption data and insert it into the dataclass"""

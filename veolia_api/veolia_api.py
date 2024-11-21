@@ -435,7 +435,16 @@ class VeoliaAPI:
 
             if response.status == HTTPStatus.NO_CONTENT:
                 self.logger.info("No alerts settings found")
-                return AlertSettings()
+                return AlertSettings(
+                    daily_enabled=False,
+                    daily_threshold=0,
+                    daily_notif_email=False,
+                    daily_notif_sms=False,
+                    monthly_enabled=False,
+                    monthly_threshold=0,
+                    monthly_notif_email=False,
+                    monthly_notif_sms=False,
+                )
 
             if response.status == HTTPStatus.OK:
                 data = await response.json()
@@ -443,6 +452,7 @@ class VeoliaAPI:
                 daily_alert = seuils.get("journalier", None)
                 monthly_alert = seuils.get("mensuel", None)
 
+                self.logger.debug("Alerts settings: %s", data)
                 self.logger.debug("OK - Alerts settings received")
 
                 return AlertSettings(
@@ -563,12 +573,13 @@ class VeoliaAPI:
             "Content-Type": "application/json",
         }
 
+        self.logger.debug("Alert settings payload: %s", payload)
         async with self.session.post(url, headers=headers, json=payload) as response:
             self.logger.debug("Received response with status code %s ", response.status)
             res = response.status
             if res != HTTPStatus.NO_CONTENT:
                 raise VeoliaAPISetDataError(
-                    f"Failed to set alerts settings with status code {response.status}",
+                    f"Failed to set alerts settings with status code {response.status}, maybe alert are not supported on this account ?",
                 )
             self.logger.debug("OK - Alerts settings set")
             return res == HTTPStatus.NO_CONTENT

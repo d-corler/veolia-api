@@ -79,7 +79,7 @@ API_CONNECTION_FLOW = {
     MFA_WEBAUTHN_PLATFORM_ENROLLMENT_ENDPOINT: {
         "method": POST,
         "params": lambda state: {
-            "action": "refuse-add-device",
+            "action": "pick-authenticator",
             "state": state,
         },
         "success_status": HTTPStatus.FOUND,
